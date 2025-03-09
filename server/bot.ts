@@ -214,6 +214,16 @@ export function setupBot() {
         return;
       }
 
+      const category = await storage.getCategory(categoryId);
+      if (category) {
+        bot.sendMessage(chatId,
+          `📁 *${category.name}*\n\n` +
+          `${category.description || 'Нет описания'}\n\n` +
+          `Доступно товаров: ${categoryProducts.length}`,
+          { parse_mode: "Markdown" }
+        );
+      }
+
       for (const product of categoryProducts) {
         const keyboard = {
           inline_keyboard: [[{
@@ -248,6 +258,16 @@ export function setupBot() {
         return;
       }
 
+      if (product.stock <= 0) {
+        bot.sendMessage(chatId,
+          "⚠️ *Товар временно недоступен*\n\n" +
+          "К сожалению, данный товар закончился.\n" +
+          "Попробуйте выбрать другой товар или вернуться позже.",
+          { parse_mode: "Markdown" }
+        );
+        return;
+      }
+
       // Генерация инструкций по оплате
       bot.sendMessage(chatId,
         `🛒 *Оформление заказа*\n\n` +
@@ -258,6 +278,17 @@ export function setupBot() {
         `• BTC: \`<адрес_кошелька>\`\n\n` +
         `📝 После оплаты отправьте ID транзакции в поддержку используя команду:\n` +
         `/support Оплата заказа ${product.name} - <ID транзакции>`,
+        { parse_mode: "Markdown" }
+      );
+
+      // Отправка дополнительной информации об условиях
+      bot.sendMessage(chatId,
+        "ℹ️ *Важная информация:*\n\n" +
+        "• Оплата обрабатывается автоматически\n" +
+        "• Товар будет доставлен после подтверждения оплаты\n" +
+        "• Среднее время обработки заказа: 5-15 минут\n" +
+        "• При возникновении проблем обратитесь в поддержку\n\n" +
+        "🔒 Мы гарантируем безопасность сделки и конфиденциальность ваших данных",
         { parse_mode: "Markdown" }
       );
     }
@@ -288,6 +319,26 @@ export function setupBot() {
       return;
     }
 
+    // Сначала отправляем общую статистику
+    const totalSpent = orders.reduce((sum, order) => sum + order.totalPrice, 0);
+    const statusCounts = orders.reduce((acc, order) => {
+      acc[order.status] = (acc[order.status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    bot.sendMessage(chatId,
+      "📊 *Статистика заказов*\n\n" +
+      `Всего заказов: ${orders.length}\n` +
+      `Общая сумма: $${(totalSpent / 100).toFixed(2)}\n\n` +
+      "*Статусы заказов:*\n" +
+      `⏳ Ожидают оплаты: ${statusCounts['pending'] || 0}\n` +
+      `💰 Оплачены: ${statusCounts['paid'] || 0}\n` +
+      `✅ Доставлены: ${statusCounts['delivered'] || 0}\n` +
+      `❌ Отменены: ${statusCounts['cancelled'] || 0}`,
+      { parse_mode: "Markdown" }
+    );
+
+    // Затем отправляем детали каждого заказа
     for (const order of orders) {
       const product = await storage.getProduct(order.productId);
       if (!product) continue;
@@ -299,13 +350,24 @@ export function setupBot() {
         cancelled: "❌"
       }[order.status] || "❓";
 
+      const formattedDate = new Date(order.createdAt).toLocaleString('ru-RU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
       bot.sendMessage(chatId,
         `📦 *Заказ #${order.id}*\n\n` +
         `Товар: ${product.name}\n` +
         `Статус: ${statusEmoji} ${order.status}\n` +
         `Количество: ${order.quantity} шт.\n` +
         `Сумма: $${(order.totalPrice / 100).toFixed(2)}\n` +
-        `Дата: ${new Date(order.createdAt).toLocaleDateString()}`,
+        `Дата: ${formattedDate}\n\n` +
+        (order.status === 'pending' ? 
+          "💡 *Ожидается оплата*\nИспользуйте команду /support для отправки ID транзакции" : 
+          ""),
         { parse_mode: "Markdown" }
       );
     }
@@ -324,13 +386,20 @@ export function setupBot() {
       return;
     }
 
+    const tickets = await storage.getUserTickets(user.id);
+    const openTickets = tickets.filter(t => t.status === 'open').length;
+
     bot.sendMessage(chatId,
       "💬 *Техническая поддержка*\n\n" +
-      "Чтобы создать тикет в поддержку, отправьте сообщение в формате:\n" +
+      `У вас ${openTickets} ${openTickets === 1 ? 'открытый тикет' : 'открытых тикетов'}\n\n` +
+      "Чтобы создать новый тикет, отправьте сообщение в формате:\n" +
       "`/support <ваше сообщение>`\n\n" +
-      "Например:\n" +
-      "`/support Не получил товар после оплаты`\n\n" +
-      "Мы ответим вам в кратчайшие сроки!",
+      "Примеры обращений:\n" +
+      "• `/support Не получил товар после оплаты`\n" +
+      "• `/support Проблема с активацией товара`\n" +
+      "• `/support Вопрос по оплате`\n\n" +
+      "⚡️ Среднее время ответа: 30 минут\n" +
+      "🕒 Время работы поддержки: 24/7",
       { parse_mode: "Markdown" }
     );
   });

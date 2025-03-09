@@ -221,10 +221,24 @@ class TelegramBot:
                 end_idx = start_idx + per_page
                 current_products = products[start_idx:end_idx]
 
+                # Format product list
+                product_lines = []
+                for product in current_products:
+                    product_lines.append(
+                        f"🏷 *{product.name}* - 💵 ${product.price:.2f}"
+                    )
+                products_text = "\n".join(product_lines)
+
+                # Format complete message text
+                text = (
+                    f"📦 Доступные товары (стр. {page}/{(len(products)-1)//per_page + 1}):\n\n"
+                    f"{products_text}"
+                )
+
                 keyboard = []
                 for product in current_products:
                     keyboard.append([InlineKeyboardButton(
-                        f"{product.name} - ${product.price}",
+                        f"{product.name} - ${product.price:.2f}",
                         callback_data=f'product_{product.id}'
                     )])
 
@@ -251,9 +265,11 @@ class TelegramBot:
                 user_state.update('category', category_id=category_id, page=page)
 
                 await query.edit_message_text(
-                    f"📦 Доступные товары (стр. {page}/{(len(products)-1)//per_page + 1}):",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
+                    text,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
                 )
+
             except Exception as e:
                 logger.error(f"Error showing products: {str(e)}")
                 await self.handle_error(update, "Не удалось загрузить товары")
@@ -440,9 +456,13 @@ class TelegramBot:
                 user = update.effective_user
                 user_state = self.get_user_state(user.id)
 
+                # Check rate limit first, before any other processing
                 if not self.rate_limiter.check_limit(user.id):
+                    remaining, wait_time = self.rate_limiter.get_remaining_attempts(user.id)
+                    keyboard = [[InlineKeyboardButton("🔄 Главное меню", callback_data='start')]]
                     await update.message.reply_text(
-                        "⚠️ Слишком много сообщений. Пожалуйста, подождите."
+                        f"⚠️ Слишком много сообщений. Пожалуйста, подождите {wait_time} секунд.",
+                        reply_markup=InlineKeyboardMarkup(keyboard)
                     )
                     return
 
@@ -452,9 +472,12 @@ class TelegramBot:
                     await self.handle_support_message(update, context, user_state)
                 else:
                     # Default response
+                    keyboard = [
+                        [InlineKeyboardButton("🔄 Главное меню", callback_data='start')]
+                    ]
                     await update.message.reply_text(
                         "Пожалуйста, используйте меню для навигации:",
-                        reply_markup=self.get_main_menu_keyboard(user.id)
+                        reply_markup=InlineKeyboardMarkup(keyboard)
                     )
 
             except Exception as e:

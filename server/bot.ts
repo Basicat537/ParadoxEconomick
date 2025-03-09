@@ -14,7 +14,12 @@ export function setupBot() {
 
     if (!user) {
       bot.sendMessage(chatId, 
-        "Добро пожаловать! Пожалуйста, сначала зарегистрируйтесь на нашем сайте, чтобы привязать аккаунт Telegram.");
+        "Добро пожаловать! Для начала работы с ботом вам нужно:\n\n" +
+        "1. Зарегистрироваться на нашем сайте\n" +
+        "2. Указать ваш Telegram ID при регистрации: " + chatId + "\n\n" +
+        "Используйте /register для получения инструкций по регистрации.",
+        { parse_mode: "Markdown" }
+      );
       return;
     }
 
@@ -29,6 +34,45 @@ export function setupBot() {
     bot.sendMessage(chatId, 
       `С возвращением, ${user.username}!\nВыберите опцию из меню ниже:`,
       { reply_markup: keyboard }
+    );
+  });
+
+  bot.onText(/\/register/, (msg) => {
+    const chatId = msg.chat.id;
+    bot.sendMessage(chatId,
+      "Для регистрации:\n\n" +
+      "1. Перейдите на сайт: http://localhost:5000/auth\n" +
+      "2. Нажмите 'Регистрация'\n" +
+      "3. Заполните форму:\n" +
+      "   - Придумайте имя пользователя\n" +
+      "   - Задайте пароль\n" +
+      "   - В поле Telegram ID введите: " + chatId + "\n\n" +
+      "После регистрации вернитесь сюда и напишите /start"
+    );
+  });
+
+  bot.onText(/\/admin/, async (msg) => {
+    const chatId = msg.chat.id;
+    const user = await storage.getUserByTelegramId(chatId.toString());
+
+    if (!user) {
+      bot.sendMessage(chatId, 
+        "Сначала необходимо зарегистрироваться. Используйте /register для получения инструкций.");
+      return;
+    }
+
+    if (!user.isAdmin) {
+      bot.sendMessage(chatId, "У вас нет прав администратора.");
+      return;
+    }
+
+    bot.sendMessage(chatId,
+      "Админ-панель доступна по адресу:\nhttp://localhost:5000/admin/products\n\n" +
+      "В панели вы можете:\n" +
+      "✓ Управлять товарами\n" +
+      "✓ Управлять категориями\n" +
+      "✓ Просматривать заказы\n" +
+      "✓ Отвечать на тикеты поддержки"
     );
   });
 

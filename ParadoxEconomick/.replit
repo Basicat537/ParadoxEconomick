@@ -1,26 +1,17 @@
-<<<<<<< HEAD
-modules = ["python-3.11"]
-=======
 modules = ["nodejs-20", "bash", "web"]
 run = "npm run dev"
 hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
->>>>>>> origin/main
 
 [nix]
 channel = "stable-24_05"
 
 [deployment]
-<<<<<<< HEAD
-deploymentTarget = "autoscale"
-run = ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
-=======
 deploymentTarget = "cloudrun"
 run = ["sh", "-c", "npm run dev"]
 
 [[ports]]
 localPort = 5000
 externalPort = 80
->>>>>>> origin/main
 
 [workflows]
 runButton = "Project"
@@ -34,13 +25,6 @@ author = "agent"
 task = "workflow.run"
 args = "Start application"
 
-<<<<<<< HEAD
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "telegram_bot"
-
-=======
->>>>>>> origin/main
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
@@ -53,28 +37,5 @@ task = "packager.installForAll"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-<<<<<<< HEAD
-args = "gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app"
-waitForPort = 5000
-
-[[workflows.workflow]]
-name = "telegram_bot"
-author = "agent"
-
-[workflows.workflow.metadata]
-agentRequireRestartOnSave = false
-
-[[workflows.workflow.tasks]]
-task = "packager.installForAll"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python bot.py"
-
-[[ports]]
-localPort = 5000
-externalPort = 80
-=======
 args = "npm run dev"
 waitForPort = 5000
->>>>>>> origin/main

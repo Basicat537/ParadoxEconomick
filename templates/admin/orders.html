@@ -1,0 +1,264 @@
+{% extends "admin/layout.html" %}
+
+{% block title %}Управление заказами - Админ панель{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>Управление заказами</h2>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <!-- Фильтры -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="searchOrder" placeholder="Поиск заказов...">
+                    <button class="btn btn-outline-secondary" type="button">
+                        <i data-feather="search"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" id="statusFilter">
+                    <option value="">Все статусы</option>
+                    <option value="pending">Ожидает оплаты</option>
+                    <option value="completed">Выполнен</option>
+                    <option value="failed">Ошибка</option>
+                    <option value="refunded">Возврат</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <input type="date" class="form-control" id="dateFilter">
+            </div>
+        </div>
+
+        <!-- Таблица заказов -->
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Пользователь</th>
+                        <th>Товар</th>
+                        <th>Сумма</th>
+                        <th>Статус</th>
+                        <th>Дата</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td>{{ order.id }}</td>
+                        <td>
+                            <a href="#" onclick="showUserDetails({{ order.user.id }})">
+                                {{ order.user.username }}
+                            </a>
+                        </td>
+                        <td>{{ order.product.name }}</td>
+                        <td>${{ "%.2f"|format(order.product.price) }}</td>
+                        <td>
+                            <span class="badge 
+                                {% if order.status == 'completed' %}bg-success
+                                {% elif order.status == 'pending' %}bg-warning
+                                {% elif order.status == 'failed' %}bg-danger
+                                {% else %}bg-secondary{% endif %}">
+                                {{ order.status }}
+                            </span>
+                        </td>
+                        <td>{{ order.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-info me-1" onclick="showOrderDetails({{ order.id }})">
+                                <i data-feather="eye"></i>
+                            </button>
+                            <button class="btn btn-sm btn-primary" onclick="updateOrderStatus({{ order.id }})">
+                                <i data-feather="edit"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно деталей заказа -->
+<div class="modal fade" id="orderDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Детали заказа</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Информация о заказе</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>ID заказа:</th>
+                                <td id="orderDetailsId"></td>
+                            </tr>
+                            <tr>
+                                <th>Статус:</th>
+                                <td id="orderDetailsStatus"></td>
+                            </tr>
+                            <tr>
+                                <th>Дата создания:</th>
+                                <td id="orderDetailsDate"></td>
+                            </tr>
+                            <tr>
+                                <th>Сумма:</th>
+                                <td id="orderDetailsAmount"></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Информация о пользователе</h6>
+                        <table class="table table-sm">
+                            <tr>
+                                <th>ID пользователя:</th>
+                                <td id="orderDetailsUserId"></td>
+                            </tr>
+                            <tr>
+                                <th>Имя пользователя:</th>
+                                <td id="orderDetailsUsername"></td>
+                            </tr>
+                            <tr>
+                                <th>Email:</th>
+                                <td id="orderDetailsEmail"></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6>История заказа</h6>
+                        <ul class="list-group" id="orderDetailsHistory">
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно изменения статуса -->
+<div class="modal fade" id="updateStatusModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Изменить статус заказа</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="updateStatusForm" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="newStatus" class="form-label">Новый статус</label>
+                        <select class="form-select" id="newStatus" name="status" required>
+                            <option value="pending">Ожидает оплаты</option>
+                            <option value="completed">Выполнен</option>
+                            <option value="failed">Ошибка</option>
+                            <option value="refunded">Возврат</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="statusComment" class="form-label">Комментарий</label>
+                        <textarea class="form-control" id="statusComment" name="comment" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Инициализация фильтров
+$(document).ready(function() {
+    // Живой поиск
+    $('#searchOrder').on('keyup', function() {
+        let value = $(this).val().toLowerCase();
+        $("table tbody tr").filter(function() {
+            $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+        });
+    });
+
+    // Фильтр по статусу
+    $('#statusFilter').change(function() {
+        let status = $(this).val();
+        $("table tbody tr").each(function() {
+            if (!status) {
+                $(this).show();
+            } else {
+                let rowStatus = $(this).find('.badge').text().trim().toLowerCase();
+                $(this).toggle(rowStatus === status);
+            }
+        });
+    });
+
+    // Фильтр по дате
+    $('#dateFilter').change(function() {
+        let date = $(this).val();
+        $("table tbody tr").each(function() {
+            if (!date) {
+                $(this).show();
+            } else {
+                let rowDate = $(this).find('td:eq(5)').text().split(' ')[0];
+                $(this).toggle(rowDate === date);
+            }
+        });
+    });
+});
+
+// Показать детали заказа
+function showOrderDetails(orderId) {
+    $.get(`/admin/orders/${orderId}`, function(data) {
+        $('#orderDetailsId').text(data.id);
+        $('#orderDetailsStatus').text(data.status);
+        $('#orderDetailsDate').text(data.created_at);
+        $('#orderDetailsAmount').text(`$${data.product.price}`);
+        $('#orderDetailsUserId').text(data.user.id);
+        $('#orderDetailsUsername').text(data.user.username);
+        $('#orderDetailsEmail').text(data.user.email);
+
+        // Заполнение истории заказа
+        let historyHtml = '';
+        data.history.forEach(function(event) {
+            historyHtml += `
+                <li class="list-group-item">
+                    <small class="text-muted">${event.date}</small><br>
+                    ${event.description}
+                </li>`;
+        });
+        $('#orderDetailsHistory').html(historyHtml);
+
+        $('#orderDetailsModal').modal('show');
+    });
+}
+
+// Обновить статус заказа
+function updateOrderStatus(orderId) {
+    $('#updateStatusForm').attr('action', `/admin/orders/${orderId}/update-status`);
+    $('#updateStatusModal').modal('show');
+}
+
+// Показать детали пользователя
+function showUserDetails(userId) {
+    window.location.href = `/admin/users/${userId}`;
+}
+</script>
+{% endblock %}

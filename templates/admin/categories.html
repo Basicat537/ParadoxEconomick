@@ -1,0 +1,104 @@
+{% extends "admin/layout.html" %}
+
+{% block title %}Управление категориями - Админ панель{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>Управление категориями</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCategoryModal">
+            <i data-feather="plus"></i> Добавить категорию
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название</th>
+                        <th>Описание</th>
+                        <th>Кол-во товаров</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for category in categories %}
+                    <tr>
+                        <td>{{ category.id }}</td>
+                        <td>{{ category.name }}</td>
+                        <td>{{ category.description }}</td>
+                        <td>{{ category.products|length }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-info me-1" onclick="editCategory({{ category.id }})">
+                                <i data-feather="edit-2"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteCategory({{ category.id }})">
+                                <i data-feather="trash-2"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно добавления/редактирования категории -->
+<div class="modal fade" id="categoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="categoryModalTitle">Добавить категорию</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="categoryForm" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="categoryName" class="form-label">Название</label>
+                        <input type="text" class="form-control" id="categoryName" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="categoryDescription" class="form-label">Описание</label>
+                        <textarea class="form-control" id="categoryDescription" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Редактирование категории
+function editCategory(id) {
+    $.get(`/admin/categories/${id}`, function(data) {
+        $('#categoryModalTitle').text('Редактировать категорию');
+        $('#categoryForm').attr('action', `/admin/categories/${id}/update`);
+        $('#categoryName').val(data.name);
+        $('#categoryDescription').val(data.description);
+        $('#categoryModal').modal('show');
+    });
+}
+
+// Удаление категории
+function deleteCategory(id) {
+    if (confirm('Вы уверены, что хотите удалить эту категорию? Все связанные товары также будут удалены.')) {
+        $.post(`/admin/categories/${id}/delete`, function() {
+            location.reload();
+        });
+    }
+}
+</script>
+{% endblock %}

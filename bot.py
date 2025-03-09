@@ -12,19 +12,16 @@ from services.admin_service import AdminService
 from utils.rate_limiter import RateLimiter
 from utils.validators import validate_input
 from utils.security import check_user_access
+from utils.logger import BotLogger
+from utils.error_handler import handle_errors, db_session_decorator
 from app import app
 
-# Configure logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=getattr(logging, Config.LOG_LEVEL)
-)
-logger = logging.getLogger(__name__)
+logger = BotLogger.get_logger()
 
 class TelegramBot:
     def __init__(self):
-        # Initialize services
         try:
+            # Initialize services
             self.product_service = ProductService()
             self.user_service = UserService()
             self.order_service = OrderService()
@@ -38,36 +35,42 @@ class TelegramBot:
             logger.error(f"Failed to initialize bot: {str(e)}")
             raise
 
+    @handle_errors
+    @db_session_decorator
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         with app.app_context():
-            try:
-                user = update.effective_user
-                if not self.rate_limiter.check_limit(user.id):
-                    await update.message.reply_text("Слишком много запросов. Пожалуйста, попробуйте позже.")
-                    return
+            user = update.effective_user
+            BotLogger.log_request(update, context)
 
-                await self.user_service.create_user_if_not_exists(user)
-                logger.info(f"User {user.id} started the bot")
-
-                keyboard = [
-                    [InlineKeyboardButton("🛍 Каталог", callback_data='catalog'),
-                     InlineKeyboardButton("🛒 Мои заказы", callback_data='orders')],
-                    [InlineKeyboardButton("👤 Профиль", callback_data='profile'),
-                     InlineKeyboardButton("❓ Поддержка", callback_data='support')]
-                ]
-
-                if await self.admin_service.is_admin(user.id):
-                    keyboard.append([InlineKeyboardButton("⚙️ Админ панель", callback_data='admin')])
-
-                reply_markup = InlineKeyboardMarkup(keyboard)
+            if not self.rate_limiter.check_limit(user.id):
                 await update.message.reply_text(
-                    f"Добро пожаловать в наш магазин цифровых товаров, {user.first_name}!",
-                    reply_markup=reply_markup
+                    "Слишком много запросов. Пожалуйста, попробуйте позже."
                 )
-            except Exception as e:
-                logger.error(f"Error in start command: {str(e)}")
-                await update.message.reply_text("Произошла ошибка. Пожалуйста, попробуйте позже.")
+                return
 
+            await self.user_service.create_user_if_not_exists(user)
+            logger.info(f"User {user.id} started the bot")
+
+            keyboard = [
+                [InlineKeyboardButton("🛍 Каталог", callback_data='catalog'),
+                 InlineKeyboardButton("🛒 Мои заказы", callback_data='orders')],
+                [InlineKeyboardButton("👤 Профиль", callback_data='profile'),
+                 InlineKeyboardButton("❓ Поддержка", callback_data='support')]
+            ]
+
+            if await self.admin_service.is_admin(user.id):
+                keyboard.append([
+                    InlineKeyboardButton("⚙️ Админ панель", callback_data='admin')
+                ])
+
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text(
+                f"Добро пожаловать в наш магазин цифровых товаров, {user.first_name}!",
+                reply_markup=reply_markup
+            )
+
+    @handle_errors
+    @db_session_decorator
     async def show_catalog(self, update, context: ContextTypes.DEFAULT_TYPE):
         with app.app_context():
             query = update.callback_query
@@ -88,6 +91,8 @@ class TelegramBot:
                 logger.error(f"Error showing catalog: {str(e)}")
                 await query.answer("Не удалось загрузить каталог. Пожалуйста, попробуйте позже.")
 
+    @handle_errors
+    @db_session_decorator
     async def show_products(self, update, context: ContextTypes.DEFAULT_TYPE, category_id: int):
         with app.app_context():
             query = update.callback_query
@@ -109,6 +114,8 @@ class TelegramBot:
                 logger.error(f"Error showing products: {str(e)}")
                 await query.answer("Не удалось загрузить товары. Пожалуйста, попробуйте позже.")
 
+    @handle_errors
+    @db_session_decorator
     async def show_product_details(self, update, context: ContextTypes.DEFAULT_TYPE, product_id: int):
         with app.app_context():
             query = update.callback_query
@@ -134,10 +141,13 @@ class TelegramBot:
                 logger.error(f"Error showing product details: {str(e)}")
                 await query.answer("Не удалось загрузить информацию о товаре. Пожалуйста, попробуйте позже.")
 
+    @handle_errors
+    @db_session_decorator
     async def handle_callback(self, update, context: ContextTypes.DEFAULT_TYPE):
         with app.app_context():
             query = update.callback_query
             user = query.from_user
+            BotLogger.log_request(update, context)
 
             try:
                 if not self.rate_limiter.check_limit(user.id):
@@ -167,6 +177,8 @@ class TelegramBot:
                 logger.error(f"Error handling callback: {str(e)}")
                 await query.answer("Произошла ошибка. Пожалуйста, попробуйте позже.")
 
+    @handle_errors
+    @db_session_decorator
     async def show_orders(self, update, context: ContextTypes.DEFAULT_TYPE):
         with app.app_context():
             query = update.callback_query
@@ -202,6 +214,8 @@ class TelegramBot:
                 logger.error(f"Error showing orders: {str(e)}")
                 await query.answer("Не удалось загрузить заказы. Пожалуйста, попробуйте позже.")
 
+    @handle_errors
+    @db_session_decorator
     async def show_profile(self, update, context: ContextTypes.DEFAULT_TYPE):
         with app.app_context():
             query = update.callback_query
@@ -228,6 +242,8 @@ Username: @{profile['username']}
                 logger.error(f"Error showing profile: {str(e)}")
                 await query.answer("Не удалось загрузить профиль. Пожалуйста, попробуйте позже.")
 
+    @handle_errors
+    @db_session_decorator
     async def show_support(self, update, context: ContextTypes.DEFAULT_TYPE):
         with app.app_context():
             query = update.callback_query
@@ -242,6 +258,8 @@ Username: @{profile['username']}
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
 
+    @handle_errors
+    @db_session_decorator
     async def show_admin_panel(self, update, context: ContextTypes.DEFAULT_TYPE):
         with app.app_context():
             query = update.callback_query
@@ -279,6 +297,8 @@ Username: @{profile['username']}
                 await query.answer("Не удалось загрузить админ панель. Пожалуйста, попробуйте позже.")
 
     @validate_input
+    @handle_errors
+    @db_session_decorator
     async def handle_message(self, update, context: ContextTypes.DEFAULT_TYPE):
         with app.app_context():
             try:
@@ -305,11 +325,17 @@ Username: @{profile['username']}
             # Add handlers
             app.add_handler(CommandHandler("start", self.start))
             app.add_handler(CallbackQueryHandler(self.handle_callback))
-            app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+            app.add_handler(MessageHandler(
+                filters.TEXT & ~filters.COMMAND, 
+                self.handle_message
+            ))
 
             # Start the bot
             logger.info("Bot started")
-            app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+            app.run_polling(
+                allowed_updates=Update.ALL_TYPES,
+                drop_pending_updates=True
+            )
         except Exception as e:
             logger.error(f"Failed to start bot: {str(e)}")
             raise

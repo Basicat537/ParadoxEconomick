@@ -1,0 +1,191 @@
+{% extends "admin/layout.html" %}
+
+{% block title %}Дашборд - Админ панель{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <h2>Обзор системы</h2>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Основные метрики -->
+    <div class="col-md-3 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i data-feather="users" class="me-2"></i>
+                    Пользователи
+                </h5>
+                <div class="display-4">{{ stats.total_users }}</div>
+                <p class="text-muted">
+                    +{{ stats.time_stats.new_users_24h }} за 24ч
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i data-feather="shopping-cart" class="me-2"></i>
+                    Заказы
+                </h5>
+                <div class="display-4">{{ stats.completed_orders }}</div>
+                <p class="text-muted">
+                    +{{ stats.time_stats.orders_24h }} за 24ч
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i data-feather="dollar-sign" class="me-2"></i>
+                    Доход
+                </h5>
+                <div class="display-4">${{ "%.2f"|format(stats.total_revenue) }}</div>
+                <p class="text-muted">
+                    Всего за все время
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 mb-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i data-feather="message-square" class="me-2"></i>
+                    Активные тикеты
+                </h5>
+                <div class="display-4">{{ stats.pending_tickets }}</div>
+                <p class="text-muted">
+                    Среднее время ответа: {{ "%.1f"|format(stats.support_stats.average_response_time) }}ч
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- График продаж -->
+    <div class="col-md-8 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Динамика продаж</h5>
+                <canvas id="salesChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Последние действия -->
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Последние действия</h5>
+                <div class="list-group list-group-flush">
+                    {% for action in recent_actions %}
+                    <div class="list-group-item bg-transparent">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">{{ action.type }}</h6>
+                            <small class="text-muted">{{ action.time }}</small>
+                        </div>
+                        <p class="mb-1">{{ action.description }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Популярные товары -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Популярные товары</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Товар</th>
+                                <th>Продажи</th>
+                                <th>Доход</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in top_products %}
+                            <tr>
+                                <td>{{ product.name }}</td>
+                                <td>{{ product.sales }}</td>
+                                <td>${{ "%.2f"|format(product.revenue) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Статистика поддержки -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Статистика поддержки</h5>
+                <canvas id="supportChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// График продаж
+const salesCtx = document.getElementById('salesChart').getContext('2d');
+new Chart(salesCtx, {
+    type: 'line',
+    data: {
+        labels: {{ sales_data.labels|tojson }},
+        datasets: [{
+            label: 'Продажи',
+            data: {{ sales_data.values|tojson }},
+            borderColor: 'rgb(75, 192, 192)',
+            tension: 0.1
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false
+    }
+});
+
+// График поддержки
+const supportCtx = document.getElementById('supportChart').getContext('2d');
+new Chart(supportCtx, {
+    type: 'doughnut',
+    data: {
+        labels: ['Открытые', 'В работе', 'Закрытые'],
+        datasets: [{
+            data: {{ support_data|tojson }},
+            backgroundColor: [
+                'rgb(255, 99, 132)',
+                'rgb(255, 205, 86)',
+                'rgb(75, 192, 192)'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false
+    }
+});
+</script>
+{% endblock %}

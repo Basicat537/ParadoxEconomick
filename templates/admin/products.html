@@ -1,0 +1,391 @@
+{% extends "admin/layout.html" %}
+
+{% block title %}Управление товарами - Админ панель{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h2>Управление товарами</h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addProductModal">
+            <i data-feather="plus"></i> Добавить товар
+        </button>
+        <button class="btn btn-secondary" id="exportProducts">
+            <i data-feather="download"></i> Экспорт
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <!-- Фильтры -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="searchProduct" placeholder="Поиск товаров...">
+                    <button class="btn btn-outline-secondary" type="button">
+                        <i data-feather="search"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" id="categoryFilter">
+                    <option value="">Все категории</option>
+                    {% for category in categories %}
+                    <option value="{{ category.id }}">{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" id="statusFilter">
+                    <option value="">Все статусы</option>
+                    <option value="active">Активные</option>
+                    <option value="inactive">Неактивные</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" id="sortFilter">
+                    <option value="newest">Сначала новые</option>
+                    <option value="oldest">Сначала старые</option>
+                    <option value="price_asc">Цена (возр.)</option>
+                    <option value="price_desc">Цена (убыв.)</option>
+                    <option value="sales">По продажам</option>
+                </select>
+            </div>
+            <div class="col-md-3 text-end">
+                <button class="btn btn-outline-secondary" id="resetFilters">
+                    <i data-feather="refresh-cw"></i> Сбросить
+                </button>
+            </div>
+        </div>
+
+        <!-- Таблица товаров -->
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>
+                            <input type="checkbox" class="form-check-input" id="selectAll">
+                        </th>
+                        <th>ID</th>
+                        <th>Название</th>
+                        <th>Категория</th>
+                        <th>Цена</th>
+                        <th>Статус</th>
+                        <th>Продажи</th>
+                        <th>Последнее обновление</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                    <tr data-product-id="{{ product.id }}">
+                        <td>
+                            <input type="checkbox" class="form-check-input product-select">
+                        </td>
+                        <td>{{ product.id }}</td>
+                        <td>{{ product.name }}</td>
+                        <td>{{ product.category.name }}</td>
+                        <td>${{ "%.2f"|format(product.price) }}</td>
+                        <td>
+                            <span class="badge {% if product.active %}bg-success{% else %}bg-danger{% endif %}">
+                                {{ "Активен" if product.active else "Неактивен" }}
+                            </span>
+                        </td>
+                        <td>{{ product.orders|length }}</td>
+                        <td>{{ product.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-info" onclick="viewProduct({{ product.id }})">
+                                    <i data-feather="eye"></i>
+                                </button>
+                                <button class="btn btn-sm btn-primary" onclick="editProduct({{ product.id }})">
+                                    <i data-feather="edit-2"></i>
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteProduct({{ product.id }})">
+                                    <i data-feather="trash-2"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Пагинация -->
+        <div class="d-flex justify-content-between align-items-center mt-4">
+            <div class="batch-actions" style="display: none;">
+                <button class="btn btn-warning" onclick="batchDeactivate()">
+                    <i data-feather="eye-off"></i> Деактивировать
+                </button>
+                <button class="btn btn-success" onclick="batchActivate()">
+                    <i data-feather="eye"></i> Активировать
+                </button>
+                <button class="btn btn-danger" onclick="batchDelete()">
+                    <i data-feather="trash-2"></i> Удалить
+                </button>
+            </div>
+            <nav>
+                <ul class="pagination mb-0">
+                    {{ pagination.links }}
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно товара -->
+<div class="modal fade" id="productModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="productModalTitle">Товар</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="productForm" method="POST" enctype="multipart/form-data">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="productName" class="form-label">Название</label>
+                                <input type="text" class="form-control" id="productName" name="name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="productCategory" class="form-label">Категория</label>
+                                <select class="form-select" id="productCategory" name="category_id" required>
+                                    {% for category in categories %}
+                                    <option value="{{ category.id }}">{{ category.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="productPrice" class="form-label">Цена</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" id="productPrice" name="price" step="0.01" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="productDescription" class="form-label">Описание</label>
+                                <textarea class="form-control" id="productDescription" name="description" rows="3"></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label for="productContent" class="form-label">Цифровой контент</label>
+                                <textarea class="form-control" id="productContent" name="digital_content" rows="3"></textarea>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="productActive" name="active" checked>
+                                <label class="form-check-label" for="productActive">Активен</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Инициализация компонентов при загрузке
+$(document).ready(function() {
+    initializeFilters();
+    initializeSelectAll();
+    initializeSorting();
+});
+
+// Инициализация фильтров
+function initializeFilters() {
+    $('#searchProduct, #categoryFilter, #statusFilter').on('input change', function() {
+        applyFilters();
+    });
+
+    $('#resetFilters').click(function() {
+        $('#searchProduct').val('');
+        $('#categoryFilter, #statusFilter').val('');
+        applyFilters();
+    });
+}
+
+// Управление множественным выбором
+function initializeSelectAll() {
+    $('#selectAll').change(function() {
+        $('.product-select').prop('checked', $(this).prop('checked'));
+        updateBatchActions();
+    });
+
+    $(document).on('change', '.product-select', function() {
+        updateBatchActions();
+    });
+}
+
+// Инициализация сортировки
+function initializeSorting() {
+    $('#sortFilter').change(function() {
+        applySorting($(this).val());
+    });
+}
+
+// Применение фильтров
+function applyFilters() {
+    let searchText = $('#searchProduct').val().toLowerCase();
+    let category = $('#categoryFilter').val();
+    let status = $('#statusFilter').val();
+
+    $("table tbody tr").each(function() {
+        let show = true;
+        let row = $(this);
+
+        // Поиск по тексту
+        if (searchText) {
+            let text = row.text().toLowerCase();
+            show = text.indexOf(searchText) > -1;
+        }
+
+        // Фильтр по категории
+        if (category && show) {
+            show = row.find('td:eq(3)').text() === category;
+        }
+
+        // Фильтр по статусу
+        if (status && show) {
+            let isActive = row.find('.badge').hasClass('bg-success');
+            show = (status === 'active' && isActive) || (status === 'inactive' && !isActive);
+        }
+
+        row.toggle(show);
+    });
+}
+
+// Применение сортировки
+function applySorting(sortType) {
+    let rows = $("table tbody tr").get();
+    rows.sort(function(a, b) {
+        let aVal, bVal;
+
+        switch(sortType) {
+            case 'newest':
+                aVal = new Date($(b).find('td:eq(7)').text());
+                bVal = new Date($(a).find('td:eq(7)').text());
+                break;
+            case 'oldest':
+                aVal = new Date($(a).find('td:eq(7)').text());
+                bVal = new Date($(b).find('td:eq(7)').text());
+                break;
+            case 'price_asc':
+                aVal = parseFloat($(a).find('td:eq(4)').text().replace('$', ''));
+                bVal = parseFloat($(b).find('td:eq(4)').text().replace('$', ''));
+                break;
+            case 'price_desc':
+                aVal = parseFloat($(b).find('td:eq(4)').text().replace('$', ''));
+                bVal = parseFloat($(a).find('td:eq(4)').text().replace('$', ''));
+                break;
+            case 'sales':
+                aVal = parseInt($(b).find('td:eq(6)').text());
+                bVal = parseInt($(a).find('td:eq(6)').text());
+                break;
+        }
+
+        return aVal > bVal ? 1 : -1;
+    });
+
+    $.each(rows, function(index, row) {
+        $("table tbody").append(row);
+    });
+}
+
+// Обновление отображения групповых действий
+function updateBatchActions() {
+    let checkedCount = $('.product-select:checked').length;
+    $('.batch-actions').toggle(checkedCount > 0);
+}
+
+// Просмотр товара
+function viewProduct(id) {
+    $.get(`/admin/products/${id}`, function(data) {
+        $('#productModalTitle').text('Просмотр товара');
+        $('#productForm :input').prop('disabled', true);
+        fillProductForm(data);
+        $('#productModal').modal('show');
+    });
+}
+
+// Редактирование товара
+function editProduct(id) {
+    $.get(`/admin/products/${id}`, function(data) {
+        $('#productModalTitle').text('Редактировать товар');
+        $('#productForm :input').prop('disabled', false);
+        $('#productForm').attr('action', `/admin/products/${id}/update`);
+        fillProductForm(data);
+        $('#productModal').modal('show');
+    });
+}
+
+// Заполнение формы товара
+function fillProductForm(data) {
+    $('#productName').val(data.name);
+    $('#productCategory').val(data.category_id);
+    $('#productPrice').val(data.price);
+    $('#productDescription').val(data.description);
+    $('#productContent').val(data.digital_content);
+    $('#productActive').prop('checked', data.active);
+}
+
+// Удаление товара
+function deleteProduct(id) {
+    if (confirm('Вы уверены, что хотите удалить этот товар?')) {
+        $.post(`/admin/products/${id}/delete`, function() {
+            location.reload();
+        });
+    }
+}
+
+// Групповые операции
+function batchActivate() {
+    updateSelectedProducts(true);
+}
+
+function batchDeactivate() {
+    updateSelectedProducts(false);
+}
+
+function batchDelete() {
+    if (confirm('Вы уверены, что хотите удалить выбранные товары?')) {
+        let ids = getSelectedProductIds();
+        $.post('/admin/products/batch-delete', { ids: ids }, function() {
+            location.reload();
+        });
+    }
+}
+
+function updateSelectedProducts(active) {
+    let ids = getSelectedProductIds();
+    $.post('/admin/products/batch-update', {
+        ids: ids,
+        active: active
+    }, function() {
+        location.reload();
+    });
+}
+
+function getSelectedProductIds() {
+    return $('.product-select:checked').map(function() {
+        return $(this).closest('tr').data('product-id');
+    }).get();
+}
+
+// Экспорт товаров
+$('#exportProducts').click(function() {
+    window.location.href = '/admin/products/export';
+});
+</script>
+{% endblock %}

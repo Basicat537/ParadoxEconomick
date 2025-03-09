@@ -77,6 +77,40 @@ export function setupBot() {
     );
   });
 
+  bot.onText(/👤 Профиль/, async (msg) => {
+    const chatId = msg.chat.id;
+    const user = await storage.getUserByTelegramId(chatId.toString());
+
+    if (!user) {
+      bot.sendMessage(chatId, 
+        "❌ *Доступ запрещен*\n\n" +
+        "Пожалуйста, сначала зарегистрируйтесь на нашем сайте.",
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    const orders = await storage.getUserOrders(user.id);
+    const completedOrders = orders.filter(o => o.status === 'delivered').length;
+    const activeOrders = orders.filter(o => ['pending', 'paid'].includes(o.status)).length;
+
+    bot.sendMessage(chatId,
+      "👤 *Профиль пользователя*\n\n" +
+      `*Имя пользователя:* ${user.username}\n` +
+      `*ID Telegram:* \`${user.telegramId}\`\n` +
+      `*Дата регистрации:* ${new Date(user.createdAt).toLocaleDateString()}\n\n` +
+      "📊 *Статистика:*\n" +
+      `• Всего заказов: ${orders.length}\n` +
+      `• Выполнено: ${completedOrders}\n` +
+      `• Активных: ${activeOrders}\n\n` +
+      "💡 *Действия:*\n" +
+      "• Используйте 🛍 Каталог для покупок\n" +
+      "• Используйте 🛒 Мои заказы для просмотра заказов\n" +
+      "• Используйте 💬 Поддержка для связи с нами",
+      { parse_mode: "Markdown" }
+    );
+  });
+
   bot.onText(/📝 Инструкции по регистрации|\/register/, (msg) => {
     const chatId = msg.chat.id;
     bot.sendMessage(chatId,

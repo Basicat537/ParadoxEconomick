@@ -19,7 +19,7 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String(255), unique=True)
     active = db.Column(db.Boolean())
     roles = db.relationship('Role', secondary=roles_users,
-                          backref=db.backref('users', lazy='dynamic'))
+                         backref=db.backref('users', lazy='dynamic'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     orders = db.relationship('Order', backref='user', lazy=True)
 

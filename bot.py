@@ -13,16 +13,29 @@ from utils.rate_limiter import RateLimiter
 from utils.validators import validate_input
 from utils.security import check_user_access
 
-logging.basicConfig(level=Config.LOG_LEVEL)
+# Configure logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=getattr(logging, Config.LOG_LEVEL)
+)
 logger = logging.getLogger(__name__)
 
 class TelegramBot:
     def __init__(self):
-        self.product_service = ProductService()
-        self.user_service = UserService()
-        self.order_service = OrderService()
-        self.admin_service = AdminService()
-        self.rate_limiter = RateLimiter()
+        # Initialize services
+        try:
+            self.product_service = ProductService()
+            self.user_service = UserService()
+            self.order_service = OrderService()
+            self.admin_service = AdminService()
+            self.rate_limiter = RateLimiter()
+
+            # Validate required configuration
+            Config.check_required_vars()
+            logger.info("Bot initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize bot: {str(e)}")
+            raise
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
@@ -32,6 +45,7 @@ class TelegramBot:
                 return
 
             await self.user_service.create_user_if_not_exists(user)
+            logger.info(f"User {user.id} started the bot")
 
             keyboard = [
                 [InlineKeyboardButton("🛍 Каталог", callback_data='catalog'),
@@ -273,15 +287,31 @@ Username: @{profile['username']}
             await update.message.reply_text("Произошла ошибка. Пожалуйста, попробуйте позже.")
 
     def run(self):
-        app = Application.builder().token(Config.BOT_TOKEN).build()
+        """Run the bot"""
+        try:
+            # Create and configure the application
+            app = Application.builder().token(Config.BOT_TOKEN).build()
 
-        app.add_handler(CommandHandler("start", self.start))
-        app.add_handler(CallbackQueryHandler(self.handle_callback))
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
+            # Add handlers
+            app.add_handler(CommandHandler("start", self.start))
+            app.add_handler(CallbackQueryHandler(self.handle_callback))
+            app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
 
-        logger.info("Bot started")
-        app.run_polling()
+            # Start the bot
+            logger.info("Bot started")
+            app.run_polling(allowed_updates=Update.ALL_TYPES)
+        except Exception as e:
+            logger.error(f"Failed to start bot: {str(e)}")
+            raise
+
+def main():
+    """Main function to run the bot"""
+    try:
+        bot = TelegramBot()
+        bot.run()
+    except Exception as e:
+        logger.critical(f"Critical error: {str(e)}")
+        raise
 
 if __name__ == '__main__':
-    bot = TelegramBot()
-    bot.run()
+    main()

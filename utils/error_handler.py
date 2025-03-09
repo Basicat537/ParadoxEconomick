@@ -3,6 +3,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from telegram import Update
 from telegram.error import TelegramError
 from utils.logger import BotLogger
+from app import app
 
 logger = BotLogger.get_logger()
 
@@ -11,7 +12,9 @@ def handle_errors(func):
     @wraps(func)
     async def wrapper(self, update: Update, context, *args, **kwargs):
         try:
-            return await func(self, update, context, *args, **kwargs)
+            # Execute the function within Flask app context
+            with app.app_context():
+                return await func(self, update, context, *args, **kwargs)
         except SQLAlchemyError as e:
             logger.error(f"Database error in {func.__name__}: {str(e)}")
             if update.callback_query:
@@ -48,7 +51,7 @@ def handle_errors(func):
                     )
             except:
                 pass
-            
+
     return wrapper
 
 def db_session_decorator(func):
@@ -57,11 +60,14 @@ def db_session_decorator(func):
     async def wrapper(*args, **kwargs):
         from app import db
         try:
-            result = await func(*args, **kwargs)
-            db.session.commit()
-            return result
+            # Execute the function within Flask app context
+            with app.app_context():
+                result = await func(*args, **kwargs)
+                db.session.commit()
+                return result
         except Exception as e:
-            db.session.rollback()
+            with app.app_context():
+                db.session.rollback()
             logger.error(f"Database session error in {func.__name__}: {str(e)}")
             raise
     return wrapper

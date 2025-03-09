@@ -14,7 +14,7 @@ from utils.validators import validate_input
 from utils.security import check_user_access
 from utils.logger import BotLogger
 from utils.error_handler import handle_errors, db_session_decorator
-from app import app
+from app import app, db
 from datetime import datetime, timedelta
 
 logger = BotLogger.get_logger()
@@ -38,17 +38,22 @@ class UserState:
 class TelegramBot:
     def __init__(self):
         try:
-            # Initialize services
-            self.product_service = ProductService()
-            self.user_service = UserService()
-            self.order_service = OrderService()
-            self.admin_service = AdminService()
-            self.rate_limiter = RateLimiter()
-            self.user_states = {}
+            logger.info("Starting bot initialization...")
 
-            # Validate required configuration
-            Config.check_required_vars()
-            logger.info("Bot initialized successfully")
+            # Initialize services within app context
+            with app.app_context():
+                logger.info("Initializing services...")
+                self.product_service = ProductService()
+                self.user_service = UserService()
+                self.order_service = OrderService()
+                self.admin_service = AdminService()
+                self.rate_limiter = RateLimiter()
+                self.user_states = {}
+
+                # Validate required configuration
+                logger.info("Validating configuration...")
+                Config.check_required_vars()
+                logger.info("Bot initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize bot: {str(e)}")
             raise
@@ -63,33 +68,33 @@ class TelegramBot:
         """Enhanced error handling with detailed feedback"""
         try:
             user_id = update.effective_user.id
+            with app.app_context():
+                # Check if this is a rate limit error
+                remaining, wait_time = self.rate_limiter.get_remaining_attempts(user_id)
+                if wait_time > 0:
+                    error_message = (
+                        f"⚠️ {error_message}\n"
+                        f"Пожалуйста, подождите {wait_time} секунд перед следующей попыткой."
+                    )
 
-            # Check if this is a rate limit error
-            remaining, wait_time = self.rate_limiter.get_remaining_attempts(user_id)
-            if wait_time > 0:
-                error_message = (
-                    f"⚠️ {error_message}\n"
-                    f"Пожалуйста, подождите {wait_time} секунд перед следующей попыткой."
-                )
+                if update.callback_query:
+                    await update.callback_query.answer(
+                        error_message,
+                        show_alert=True
+                    )
+                else:
+                    keyboard = [[
+                        InlineKeyboardButton("🔄 Главное меню", callback_data='start')
+                    ]]
+                    await update.message.reply_text(
+                        f"{error_message}\n\nИспользуйте меню для навигации:",
+                        reply_markup=InlineKeyboardMarkup(keyboard)
+                    )
 
-            if update.callback_query:
-                await update.callback_query.answer(
-                    error_message,
-                    show_alert=True
+                logger.warning(
+                    f"Error handled for user {user_id}: {error_message} "
+                    f"(Wait time: {wait_time}s)"
                 )
-            else:
-                keyboard = [[
-                    InlineKeyboardButton("🔄 Главное меню", callback_data='start')
-                ]]
-                await update.message.reply_text(
-                    f"{error_message}\n\nИспользуйте меню для навигации:",
-                    reply_markup=InlineKeyboardMarkup(keyboard)
-                )
-
-            logger.warning(
-                f"Error handled for user {user_id}: {error_message} "
-                f"(Wait time: {wait_time}s)"
-            )
         except Exception as e:
             logger.error(f"Error in error handler: {str(e)}")
 
@@ -659,33 +664,41 @@ Username: @{profile['username']}
         """Run the bot with enhanced error handling"""
         try:
             # Create and configure the application
-            app = Application.builder().token(Config.BOT_TOKEN).build()
+            logger.info(f"Creating application with token: {Config.BOT_TOKEN[:5]}...")
+            telegram_app = Application.builder().token(Config.BOT_TOKEN).build()
+            logger.info("Application created successfully")
 
             # Add handlers
-            app.add_handler(CommandHandler("start", self.start))
-            app.add_handler(CallbackQueryHandler(self.handle_callback))
-            app.add_handler(MessageHandler(
+            logger.info("Adding handlers...")
+            telegram_app.add_handler(CommandHandler("start", self.start))
+            telegram_app.add_handler(CallbackQueryHandler(self.handle_callback))
+            telegram_app.add_handler(MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
                 self.handle_message
             ))
 
-            # Start the bot
-            logger.info("Bot started")
-            app.run_polling(
-                allowed_updates=Update.ALL_TYPES,
-                drop_pending_updates=True
-            )
+            # Start the bot with Flask app context
+            logger.info("Starting bot polling...")
+            with app.app_context():
+                telegram_app.run_polling(
+                    allowed_updates=Update.ALL_TYPES,
+                    drop_pending_updates=True
+                )
         except Exception as e:
-            logger.error(f"Failed to start bot: {str(e)}")
+            logger.critical(f"Failed to start bot: {str(e)}", exc_info=True)
             raise
 
 def main():
     """Main function to run the bot"""
     try:
-        bot = TelegramBot()
-        bot.run()
+        # Initialize and run bot within Flask app context
+        with app.app_context():
+            logger.info("Creating bot instance...")
+            bot = TelegramBot()
+            logger.info("Starting bot...")
+            bot.run()
     except Exception as e:
-        logger.critical(f"Critical error: {str(e)}")
+        logger.critical(f"Critical error: {str(e)}", exc_info=True)
         raise
 
 if __name__ == '__main__':

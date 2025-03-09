@@ -1,5 +1,10 @@
 import os
 from datetime import timedelta
+import logging
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 class Config:
     # Database
@@ -38,9 +43,20 @@ class Config:
             'BOT_USERNAME': cls.BOT_USERNAME,
         }
 
+        logger.info("Checking required environment variables...")
+        for var_name, value in required_vars.items():
+            if not value:
+                logger.error(f"Missing required environment variable: {var_name}")
+            else:
+                logger.info(f"Found environment variable: {var_name}")
+
         missing_vars = [key for key, value in required_vars.items() if not value]
         if missing_vars:
-            raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+            error_msg = f"Missing required environment variables: {', '.join(missing_vars)}"
+            logger.critical(error_msg)
+            raise ValueError(error_msg)
+
+        logger.info("All required environment variables are present")
 
     # Logging
     LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')

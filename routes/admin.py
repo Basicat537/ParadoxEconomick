@@ -368,3 +368,71 @@ async def batch_delete_products():
     except Exception as e:
         logger.error(f"Error in batch delete products: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
+
+@admin_blueprint.route('/analytics')
+@login_required
+@admin_required
+async def analytics():
+    try:
+        # Get sales trends for last 30 days
+        sales_trends = await admin_service.get_sales_trends(30)
+
+        # Get top products
+        top_products = await admin_service.get_top_products(5)
+
+        # Get general statistics
+        stats = await admin_service.get_statistics()
+
+        return render_template('admin/analytics.html',
+            sales_trends=sales_trends,
+            top_products=top_products,
+            stats=stats
+        )
+    except Exception as e:
+        logger.error(f"Error in admin analytics: {str(e)}")
+        flash('Произошла ошибка при загрузке аналитики', 'danger')
+        return redirect(url_for('admin.dashboard'))
+
+@admin_blueprint.route('/analytics/export')
+@login_required
+@admin_required
+async def export_analytics():
+    try:
+        sales_trends = await admin_service.get_sales_trends(30)
+        top_products = await admin_service.get_top_products(10)
+
+        output = StringIO()
+        writer = csv.writer(output)
+
+        # Write sales trends
+        writer.writerow(['Дата', 'Количество продаж', 'Выручка'])
+        for i, date in enumerate(sales_trends['dates']):
+            writer.writerow([
+                date,
+                sales_trends['sales'][i],
+                sales_trends['revenue'][i]
+            ])
+
+        writer.writerow([])  # Empty row as separator
+
+        # Write top products
+        writer.writerow(['ID товара', 'Название', 'Количество продаж', 'Выручка'])
+        for product in top_products:
+            writer.writerow([
+                product['id'],
+                product['name'],
+                product['sales'],
+                product['revenue']
+            ])
+
+        output.seek(0)
+        return send_file(
+            output,
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'analytics_export_{datetime.utcnow().strftime("%Y%m%d_%H%M")}.csv'
+        )
+    except Exception as e:
+        logger.error(f"Error exporting analytics: {str(e)}")
+        flash('Произошла ошибка при экспорте аналитики', 'danger')
+        return redirect(url_for('admin.analytics'))

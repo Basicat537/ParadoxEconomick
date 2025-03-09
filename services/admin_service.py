@@ -375,3 +375,121 @@ class AdminService:
         except Exception as e:
             logger.error(f"Unexpected error in batch delete products: {str(e)}")
             return False
+
+    async def get_top_products(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Get top-selling products with revenue stats"""
+        try:
+            products = Product.query.join(Order).filter(
+                Order.status == 'completed'
+            ).group_by(Product.id).all()
+
+            # Calculate sales and revenue
+            product_stats = []
+            for product in products:
+                completed_orders = [order for order in product.orders if order.status == 'completed']
+                revenue = sum(order.product.price for order in completed_orders)
+                product_stats.append({
+                    'id': product.id,
+                    'name': product.name,
+                    'sales': len(completed_orders),
+                    'revenue': revenue
+                })
+
+            # Sort by revenue and get top products
+            product_stats.sort(key=lambda x: x['revenue'], reverse=True)
+            return product_stats[:limit]
+
+        except SQLAlchemyError as e:
+            logger.error(f"Database error when fetching top products: {str(e)}")
+            raise
+
+    async def get_sales_trends(self, days: int = 30) -> Dict[str, List]:
+        """Get daily sales trends for specified period"""
+        try:
+            end_date = datetime.utcnow()
+            start_date = end_date - timedelta(days=days)
+
+            # Get orders within date range
+            orders = Order.query.filter(
+                Order.created_at >= start_date,
+                Order.created_at <= end_date,
+                Order.status == 'completed'
+            ).order_by(Order.created_at).all()
+
+            # Group by date
+            daily_sales = {}
+            daily_revenue = {}
+            for order in orders:
+                date = order.created_at.strftime('%Y-%m-%d')
+                daily_sales[date] = daily_sales.get(date, 0) + 1
+                daily_revenue[date] = daily_revenue.get(date, 0) + order.product.price
+
+            # Fill in missing dates with zeros
+            date_range = []
+            current_date = start_date
+            while current_date <= end_date:
+                date_str = current_date.strftime('%Y-%m-%d')
+                date_range.append(date_str)
+                if date_str not in daily_sales:
+                    daily_sales[date_str] = 0
+                    daily_revenue[date_str] = 0
+                current_date += timedelta(days=1)
+
+            return {
+                'dates': date_range,
+                'sales': [daily_sales[date] for date in date_range],
+                'revenue': [daily_revenue[date] for date in date_range]
+            }
+
+        except SQLAlchemyError as e:
+            logger.error(f"Database error when fetching sales trends: {str(e)}")
+            raise
+
+    async def get_recent_actions(self, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get recent admin actions with enhanced tracking"""
+        try:
+            actions = []
+
+            # Get recent order changes
+            recent_orders = Order.query.order_by(
+                Order.updated_at.desc()
+            ).limit(limit).all()
+
+            for order in recent_orders:
+                actions.append({
+                    'type': 'Изменение заказа',
+                    'description': f'Заказ #{order.id}: {order.status}',
+                    'time': order.updated_at.strftime('%Y-%m-%d %H:%M')
+                })
+
+            # Get recent product changes
+            recent_products = Product.query.order_by(
+                Product.updated_at.desc()
+            ).limit(limit).all()
+
+            for product in recent_products:
+                actions.append({
+                    'type': 'Изменение товара',
+                    'description': f'Товар "{product.name}" обновлен',
+                    'time': product.updated_at.strftime('%Y-%m-%d %H:%M')
+                })
+
+            # Get recent support responses
+            recent_tickets = TicketResponse.query.order_by(
+                TicketResponse.created_at.desc()
+            ).limit(limit).all()
+
+            for response in recent_tickets:
+                actions.append({
+                    'type': 'Ответ в тикете',
+                    'description': f'Ответ на тикет #{response.ticket_id}',
+                    'time': response.created_at.strftime('%Y-%m-%d %H:%M')
+                })
+
+            # Sort all actions by time and return most recent
+            actions.sort(key=lambda x: datetime.strptime(x['time'], '%Y-%m-%d %H:%M'), reverse=True)
+            return actions[:limit]
+
+        except SQLAlchemyError as e:
+            logger.error(f"Database error when fetching recent actions: {str(e)}")
+            raise

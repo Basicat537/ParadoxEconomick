@@ -36,7 +36,7 @@ export function setupAuth(app: Express) {
     store: storage.sessionStore,
     cookie: {
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
+      maxAge: 1000 * 60 * 60 * 24 * 7 // 1 неделя
     }
   };
 
@@ -50,7 +50,7 @@ export function setupAuth(app: Express) {
       try {
         const user = await storage.getUserByUsername(username);
         if (!user || !(await comparePasswords(password, user.password))) {
-          return done(null, false, { message: "Invalid username or password" });
+          return done(null, false, { message: "Неверный логин или пароль" });
         }
         return done(null, user);
       } catch (err) {
@@ -73,7 +73,7 @@ export function setupAuth(app: Express) {
     try {
       const existingUser = await storage.getUserByUsername(req.body.username);
       if (existingUser) {
-        return res.status(400).json({ message: "Username already exists" });
+        return res.status(400).json({ message: "Пользователь с таким именем уже существует" });
       }
 
       const user = await storage.createUser({
@@ -91,10 +91,10 @@ export function setupAuth(app: Express) {
   });
 
   app.post("/api/login", (req, res, next) => {
-    passport.authenticate("local", (err: any, user: User | false, info: { message: string } | undefined) => {
+    passport.authenticate("local", (err: any, user: SelectUser | false, info: { message: string } | undefined) => {
       if (err) return next(err);
       if (!user) {
-        return res.status(401).json({ message: info?.message || "Authentication failed" });
+        return res.status(401).json({ message: info?.message || "Ошибка аутентификации" });
       }
       req.login(user, (err) => {
         if (err) return next(err);
@@ -115,13 +115,13 @@ export function setupAuth(app: Express) {
     res.json(req.user);
   });
 
-  // Admin middleware
+  // Middleware для проверки админа
   app.use("/api/admin/*", (req, res, next) => {
     if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Not authenticated" });
+      return res.status(401).json({ message: "Необходима авторизация" });
     }
     if (!req.user.isAdmin) {
-      return res.status(403).json({ message: "Not authorized" });
+      return res.status(403).json({ message: "Недостаточно прав" });
     }
     next();
   });

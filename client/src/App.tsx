@@ -22,7 +22,7 @@ function AdminRoute({
     <ProtectedRoute
       path={path}
       component={() => {
-        // Admin check is handled by the backend
+        // Проверка на админа происходит на бэкенде
         return <Component />;
       }}
     />
@@ -32,6 +32,10 @@ function AdminRoute({
 function Router() {
   return (
     <Switch>
+      {/* По умолчанию редиректим на /admin/products */}
+      <Route path="/">
+        <AdminRoute path="/" component={Products} />
+      </Route>
       <Route path="/auth" component={AuthPage} />
       <AdminRoute path="/admin/products" component={Products} />
       <AdminRoute path="/admin/categories" component={Categories} />

@@ -1,12 +1,7 @@
 import os
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import DeclarativeBase
+from extensions import db
 
-class Base(DeclarativeBase):
-    pass
-
-db = SQLAlchemy(model_class=Base)
 app = Flask(__name__)
 
 # Configure the Flask app
@@ -20,7 +15,9 @@ app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key")
 # Initialize the app with the extension
 db.init_app(app)
 
-# Import models after db initialization to avoid circular imports
 with app.app_context():
-    from models import *
+    # Import all models
+    from models import User, Role, Category, Product, Order, SupportTicket, TicketResponse
+    # Create all tables
     db.create_all()
+    print("Database tables created successfully")

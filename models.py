@@ -1,5 +1,5 @@
 from datetime import datetime
-from app import db
+from extensions import db
 from flask_security import UserMixin, RoleMixin
 
 roles_users = db.Table('roles_users',
@@ -14,7 +14,7 @@ class Role(db.Model, RoleMixin):
 
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
-    telegram_id = db.Column(db.Integer, unique=True)
+    telegram_id = db.Column(db.BigInteger, unique=True)  # Changed to BigInteger
     username = db.Column(db.String(255), unique=True)
     email = db.Column(db.String(255), unique=True)
     active = db.Column(db.Boolean())

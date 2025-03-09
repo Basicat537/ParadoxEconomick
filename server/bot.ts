@@ -32,7 +32,7 @@ export function setupBot() {
     const user = await storage.getUserByTelegramId(chatId.toString());
 
     if (!user) {
-      bot.sendMessage(chatId, 
+      bot.sendMessage(chatId,
         "👋 *Добро пожаловать в магазин цифровых товаров!*\n\n" +
         "Для начала работы с ботом вам нужно:\n\n" +
         "1️⃣ Зарегистрироваться на нашем сайте\n" +
@@ -40,7 +40,7 @@ export function setupBot() {
         "`" + chatId + "`\n\n" +
         "Используйте /register для получения подробных инструкций по регистрации.\n" +
         "Используйте /help для просмотра всех доступных команд.",
-        { 
+        {
           parse_mode: "Markdown",
           reply_markup: {
             keyboard: [
@@ -63,14 +63,14 @@ export function setupBot() {
       resize_keyboard: true
     };
 
-    bot.sendMessage(chatId, 
+    bot.sendMessage(chatId,
       `👋 *С возвращением, ${user.username}!*\n\n` +
       "Выберите нужный пункт меню:\n\n" +
       "🛍 *Каталог* - Просмотр и покупка товаров\n" +
       "🛒 *Мои заказы* - История и статус заказов\n" +
       "💬 *Поддержка* - Связь с поддержкой\n" +
       "👤 *Профиль* - Информация о профиле",
-      { 
+      {
         parse_mode: "Markdown",
         reply_markup: keyboard
       }
@@ -82,7 +82,7 @@ export function setupBot() {
     const user = await storage.getUserByTelegramId(chatId.toString());
 
     if (!user) {
-      bot.sendMessage(chatId, 
+      bot.sendMessage(chatId,
         "❌ *Доступ запрещен*\n\n" +
         "Пожалуйста, сначала зарегистрируйтесь на нашем сайте.",
         { parse_mode: "Markdown" }
@@ -133,7 +133,7 @@ export function setupBot() {
     const user = await storage.getUserByTelegramId(chatId.toString());
 
     if (!user) {
-      bot.sendMessage(chatId, 
+      bot.sendMessage(chatId,
         "❌ *Доступ запрещен*\n\n" +
         "Сначала необходимо зарегистрироваться.\n" +
         "Используйте /register для получения инструкций.",
@@ -143,7 +143,7 @@ export function setupBot() {
     }
 
     if (!user.isAdmin) {
-      bot.sendMessage(chatId, 
+      bot.sendMessage(chatId,
         "❌ *Доступ запрещен*\n\n" +
         "У вас нет прав администратора.",
         { parse_mode: "Markdown" }
@@ -165,42 +165,222 @@ export function setupBot() {
     );
   });
 
-  bot.onText(/🛍 Каталог/, async (msg) => {
+  // Добавляем команды для администраторов
+  bot.onText(/\/admin_help/, async (msg) => {
     const chatId = msg.chat.id;
-    const categories = await storage.getCategories();
+    const user = await storage.getUserByTelegramId(chatId.toString());
 
-    if (categories.length === 0) {
-      bot.sendMessage(chatId, 
-        "😕 *Каталог пуст*\n\n" +
-        "В данный момент нет доступных категорий товаров.",
+    if (!user?.isAdmin) {
+      bot.sendMessage(chatId,
+        "❌ *Доступ запрещен*\n\n" +
+        "Эта команда доступна только администраторам.",
         { parse_mode: "Markdown" }
       );
       return;
     }
 
+    bot.sendMessage(chatId,
+      "👨‍💼 *Команды администратора:*\n\n" +
+      "📊 *Управление товарами:*\n" +
+      "• `/add_product` - Добавить новый товар\n" +
+      "• `/edit_product <id>` - Редактировать товар\n" +
+      "• `/delete_product <id>` - Удалить товар\n\n" +
+      "📁 *Управление категориями:*\n" +
+      "• `/add_category` - Добавить категорию\n" +
+      "• `/edit_category <id>` - Редактировать категорию\n" +
+      "• `/delete_category <id>` - Удалить категорию\n\n" +
+      "📦 *Управление заказами:*\n" +
+      "• `/order_status <id> <status>` - Изменить статус заказа\n" +
+      "• `/orders_list` - Список последних заказов\n\n" +
+      "🎫 *Тикеты поддержки:*\n" +
+      "• `/tickets_list` - Список активных тикетов\n" +
+      "• `/close_ticket <id>` - Закрыть тикет\n" +
+      "• `/reply_ticket <id> <текст>` - Ответить на тикет",
+      { parse_mode: "Markdown" }
+    );
+  });
+
+  // Обработка команды добавления продукта
+  bot.onText(/\/add_product/, async (msg) => {
+    const chatId = msg.chat.id;
+    const user = await storage.getUserByTelegramId(chatId.toString());
+
+    if (!user?.isAdmin) {
+      bot.sendMessage(chatId,
+        "❌ *Доступ запрещен*\n\n" +
+        "Эта команда доступна только администраторам.",
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    const categories = await storage.getCategories();
     const keyboard = {
       inline_keyboard: categories.map(cat => [{
-        text: `📁 ${cat.name}`,
-        callback_data: `category_${cat.id}`
+        text: cat.name,
+        callback_data: `new_product_cat_${cat.id}`
       }])
     };
 
-    bot.sendMessage(chatId, 
-      "🛍 *Каталог товаров*\n\n" +
-      "Выберите интересующую категорию:",
-      { 
+    bot.sendMessage(chatId,
+      "📝 *Добавление нового товара*\n\n" +
+      "Выберите категорию для нового товара:",
+      {
         parse_mode: "Markdown",
         reply_markup: keyboard
       }
     );
   });
 
+  // Обработка выбора категории при добавлении товара
+  bot.onText(/new_product_cat_(\d+)/, async (msg, match) => {
+    if (!match) return;
+
+    const chatId = msg.chat.id;
+    const categoryId = parseInt(match[1]);
+
+    bot.sendMessage(chatId,
+      "📝 *Добавление товара*\n\n" +
+      "Пожалуйста, отправьте информацию о товаре в формате:\n\n" +
+      "`название\nописание\nцена\nколичество`\n\n" +
+      "Например:\n" +
+      "Premium Account\n" +
+      "Премиум аккаунт на 30 дней\n" +
+      "1000\n" +
+      "50",
+      { parse_mode: "Markdown" }
+    );
+  });
+
+  // Обработка команды просмотра заказов для админа
+  bot.onText(/\/orders_list/, async (msg) => {
+    const chatId = msg.chat.id;
+    const user = await storage.getUserByTelegramId(chatId.toString());
+
+    if (!user?.isAdmin) {
+      bot.sendMessage(chatId,
+        "❌ *Доступ запрещен*\n\n" +
+        "Эта команда доступна только администраторам.",
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    const orders = await storage.getOrders();
+    const recentOrders = orders.slice(-10); // Последние 10 заказов
+
+    if (recentOrders.length === 0) {
+      bot.sendMessage(chatId,
+        "📊 *Список заказов пуст*\n\n" +
+        "В системе пока нет заказов.",
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    // Статистика
+    const totalRevenue = orders.reduce((sum, order) => sum + order.totalPrice, 0);
+    const pendingOrders = orders.filter(o => o.status === 'pending').length;
+    const paidOrders = orders.filter(o => o.status === 'paid').length;
+
+    bot.sendMessage(chatId,
+      "📊 *Статистика заказов*\n\n" +
+      `Всего заказов: ${orders.length}\n` +
+      `Общая выручка: $${(totalRevenue / 100).toFixed(2)}\n` +
+      `Ожидают оплаты: ${pendingOrders}\n` +
+      `Оплачены: ${paidOrders}\n\n` +
+      "*Последние заказы:*",
+      { parse_mode: "Markdown" }
+    );
+
+    // Отправляем информацию о последних заказах
+    for (const order of recentOrders) {
+      const product = await storage.getProduct(order.productId);
+      const user = await storage.getUser(order.userId);
+      if (!product || !user) continue;
+
+      const statusEmoji = {
+        pending: "⏳",
+        paid: "💰",
+        delivered: "✅",
+        cancelled: "❌"
+      }[order.status] || "❓";
+
+      const orderDate = new Date(order.createdAt).toLocaleString('ru-RU', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      const keyboard = {
+        inline_keyboard: [
+          [
+            { text: "✅ Доставлен", callback_data: `order_status_${order.id}_delivered` },
+            { text: "❌ Отменён", callback_data: `order_status_${order.id}_cancelled` }
+          ]
+        ]
+      };
+
+      bot.sendMessage(chatId,
+        `🛍 *Заказ #${order.id}*\n\n` +
+        `Покупатель: ${user.username}\n` +
+        `Товар: ${product.name}\n` +
+        `Количество: ${order.quantity} шт.\n` +
+        `Сумма: $${(order.totalPrice / 100).toFixed(2)}\n` +
+        `Статус: ${statusEmoji} ${order.status}\n` +
+        `Дата: ${orderDate}`,
+        {
+          parse_mode: "Markdown",
+          reply_markup: keyboard
+        }
+      );
+    }
+  });
+
+  // Обработка изменения статуса заказа
   bot.on('callback_query', async (query) => {
     if (!query.data || !query.message) return;
 
     const chatId = query.message.chat.id;
+    const user = await storage.getUserByTelegramId(chatId.toString());
 
-    if (query.data.startsWith('category_')) {
+    if (!user?.isAdmin) {
+      bot.answerCallbackQuery(query.id, {
+        text: "У вас нет прав администратора",
+        show_alert: true
+      });
+      return;
+    }
+
+    if (query.data.startsWith('order_status_')) {
+      const [, , orderId, newStatus] = query.data.split('_');
+      const order = await storage.getOrder(parseInt(orderId));
+
+      if (order) {
+        await storage.updateOrder(order.id, { status: newStatus });
+
+        bot.answerCallbackQuery(query.id, {
+          text: `Статус заказа #${orderId} изменен на ${newStatus}`,
+          show_alert: true
+        });
+
+        // Уведомляем покупателя об изменении статуса
+        const buyer = await storage.getUser(order.userId);
+        if (buyer?.telegramId) {
+          const statusMessages = {
+            delivered: "✅ Ваш заказ доставлен! Спасибо за покупку!",
+            cancelled: "❌ Ваш заказ был отменен. Обратитесь в поддержку для уточнения деталей."
+          };
+
+          bot.sendMessage(buyer.telegramId,
+            `📦 *Обновление статуса заказа #${order.id}*\n\n${statusMessages[newStatus as 'delivered' | 'cancelled']}`,
+            { parse_mode: "Markdown" }
+          );
+        }
+      }
+    } else if (query.data.startsWith('category_')) {
       const categoryId = parseInt(query.data.split('_')[1]);
       const products = await storage.getProducts();
       const categoryProducts = products.filter(p => p.categoryId === categoryId);
@@ -237,20 +417,18 @@ export function setupBot() {
           `📝 ${product.description}\n\n` +
           `💰 Цена: $${(product.price / 100).toFixed(2)}\n` +
           `📦 В наличии: ${product.stock} шт.`,
-          { 
+          {
             parse_mode: "Markdown",
             reply_markup: keyboard
           }
         );
       }
-    }
-
-    if (query.data.startsWith('buy_')) {
+    } else if (query.data.startsWith('buy_')) {
       const productId = parseInt(query.data.split('_')[1]);
       const product = await storage.getProduct(productId);
 
       if (!product) {
-        bot.sendMessage(chatId, 
+        bot.sendMessage(chatId,
           "❌ *Ошибка*\n\n" +
           "Товар не найден или был удален.",
           { parse_mode: "Markdown" }
@@ -294,12 +472,43 @@ export function setupBot() {
     }
   });
 
+  bot.onText(/🛍 Каталог/, async (msg) => {
+    const chatId = msg.chat.id;
+    const categories = await storage.getCategories();
+
+    if (categories.length === 0) {
+      bot.sendMessage(chatId,
+        "😕 *Каталог пуст*\n\n" +
+        "В данный момент нет доступных категорий товаров.",
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    const keyboard = {
+      inline_keyboard: categories.map(cat => [{
+        text: `📁 ${cat.name}`,
+        callback_data: `category_${cat.id}`
+      }])
+    };
+
+    bot.sendMessage(chatId,
+      "🛍 *Каталог товаров*\n\n" +
+      "Выберите интересующую категорию:",
+      {
+        parse_mode: "Markdown",
+        reply_markup: keyboard
+      }
+    );
+  });
+
+
   bot.onText(/🛒 Мои заказы/, async (msg) => {
     const chatId = msg.chat.id;
     const user = await storage.getUserByTelegramId(chatId.toString());
 
     if (!user) {
-      bot.sendMessage(chatId, 
+      bot.sendMessage(chatId,
         "❌ *Доступ запрещен*\n\n" +
         "Пожалуйста, сначала зарегистрируйтесь на нашем сайте.",
         { parse_mode: "Markdown" }
@@ -310,7 +519,7 @@ export function setupBot() {
     const orders = await storage.getUserOrders(user.id);
 
     if (orders.length === 0) {
-      bot.sendMessage(chatId, 
+      bot.sendMessage(chatId,
         "📭 *История заказов пуста*\n\n" +
         "У вас пока нет заказов.\n" +
         "Используйте команду 🛍 Каталог для просмотра доступных товаров.",
@@ -365,8 +574,8 @@ export function setupBot() {
         `Количество: ${order.quantity} шт.\n` +
         `Сумма: $${(order.totalPrice / 100).toFixed(2)}\n` +
         `Дата: ${formattedDate}\n\n` +
-        (order.status === 'pending' ? 
-          "💡 *Ожидается оплата*\nИспользуйте команду /support для отправки ID транзакции" : 
+        (order.status === 'pending' ?
+          "💡 *Ожидается оплата*\nИспользуйте команду /support для отправки ID транзакции" :
           ""),
         { parse_mode: "Markdown" }
       );
@@ -378,7 +587,7 @@ export function setupBot() {
     const user = await storage.getUserByTelegramId(chatId.toString());
 
     if (!user) {
-      bot.sendMessage(chatId, 
+      bot.sendMessage(chatId,
         "❌ *Доступ запрещен*\n\n" +
         "Пожалуйста, сначала зарегистрируйтесь на нашем сайте.",
         { parse_mode: "Markdown" }
@@ -415,7 +624,7 @@ export function setupBot() {
     const user = await storage.getUserByTelegramId(chatId.toString());
 
     if (!user) {
-      bot.sendMessage(chatId, 
+      bot.sendMessage(chatId,
         "❌ *Доступ запрещен*\n\n" +
         "Пожалуйста, сначала зарегистрируйтесь на нашем сайте.",
         { parse_mode: "Markdown" }
